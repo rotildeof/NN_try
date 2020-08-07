@@ -22,9 +22,9 @@ public:
   typename std::vector<T>::iterator GetGeneIterator(int ith_creature);
 
   void CrossOver(int numDominantGene, double mutation_prob, std::string optimization_option);
-  private:
 
-
+  
+private:
   T min_;
   T max_;
   
