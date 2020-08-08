@@ -159,7 +159,7 @@ void GeneticAlgorithm<T>::Mutation(std::vector<double> &v){
 
   std::uniform_real_distribution<> uni_val(min_, max_);
   int ii = uni(mt);
-  int val = uni_val(mt);
+  double val = uni_val(mt);
   v[ii] = val;
 #ifdef DEBUG
   std::cout << "rewrote : ii --> " << ii << " val --> " << val << std::endl;
