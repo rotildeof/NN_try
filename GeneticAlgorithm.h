@@ -12,19 +12,31 @@
 template <typename T>
 class GeneticAlgorithm{
 public:
+  GeneticAlgorithm(){};
   GeneticAlgorithm(int gene_length, int population);
   ~GeneticAlgorithm(){};
 
   
   void GiveScore(int ith_creature, double score);
-  void GeneInitialization(T min, T max);
+  double GetScore(int ith_creature){
+    return creatures[ith_creature].Score;
+  };
 
+  void GeneInitialization(int min, int max);
+  void GeneInitialization(double min, double max);
+
+  int GetGeneLength(){return gene_length_;};
+  int GetPopulation(){return population_;};
+  
   typename std::vector<T>::iterator GetGeneIterator(int ith_creature);
 
   void CrossOver(int numDominantGene, double mutation_prob, std::string optimization_option);
-
   
-private:
+  private:
+  
+  int gene_length_;
+  int population_;
+
   T min_;
   T max_;
   
@@ -37,7 +49,8 @@ private:
 
   std::vector<Creature> creatures;  
 
-  void Mutation(std::vector<T> &v);
+  void Mutation(std::vector<int> &v);
+  void Mutation(std::vector<double> &v);
 
 };
 
