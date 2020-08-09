@@ -31,6 +31,8 @@ NeuralNetwork::NeuralNetwork(std::string structure_){
     nLayerNeurons[i].assign(neurons[i], 0);
   }
 
+  numLastNeurons = *(neurons.end() -1);
+  
   std::random_device rd;
   mt = std::mt19937( rd() );
 
@@ -45,28 +47,133 @@ NeuralNetwork::NeuralNetwork(std::string structure_){
 
 
 double NeuralNetwork::Sigmoid(double x){
-  return 1. / ( 1 + std::exp( -x ) );
+  double y = 1. / ( 1 + std::exp( - x ) );
+  if(y == 1){
+    y = 0.9999999999999999;
+  }
+
+  return y;
 }
 
-void NeuralNetwork::CalcuToNextLayerNeurons(int ith_connection){
-  for(int i = 0 ; i < (int)w[ith_connection].size() ; i++){
-    double sum = 0;
-    for(int j = 0 ; j < (int)w[ith_connection][i].size() ; j++){
-      sum += nLayerNeurons[ith_connection][j] * w[ith_connection][i][j];
+double NeuralNetwork::ReLU(double x){
+  if(x >= 0){
+    return x;
+  }else{
+    return 0;
+  }
+}
+
+double NeuralNetwork::Identity(double x){
+  return x;
+}
+
+void NeuralNetwork::Sigmoid(vec1D &lastLayer, vec1D const &beforeActF){
+  for(int i = 0 ; i < (int)beforeActF.size() ; i++){
+    lastLayer[i] = 1. / ( 1 + std::exp( - beforeActF[i] ) ) ;
+    if(lastLayer[i] == 1){
+      lastLayer[i] = 0.9999999999999999;
     }
-    sum += b[ith_connection][i];
-    nLayerNeurons[ith_connection + 1][i] = Sigmoid(sum);
+    if(lastLayer[i] == 0){
+      lastLayer[i] = 1e-323;
+    }
+  }
+  return;
+}
+
+void NeuralNetwork::Softmax(vec1D &lastLayer, vec1D const &beforeActF){
+  auto it_max = std::max_element(beforeActF.begin(), beforeActF.end());
+  double denominator = 0;
+  for(int i = 0 ; i < (int)beforeActF.size() ; i++){
+    denominator += std::exp(beforeActF[i] - *it_max);
+  }
+
+  for(int i = 0 ; i < (int)beforeActF.size() ; i++){
+    double numerator = std::exp(beforeActF[i] - *it_max);
+    if(numerator == 0) numerator = 1e-323;
+    lastLayer[i] = numerator / denominator;
+  }
+  return;
+}
+
+void NeuralNetwork::Identity(vec1D &lastLayer, vec1D const &beforeActF){
+
+  for(int i = 0 ; i < (int)beforeActF.size() ; i++){
+    lastLayer[i] = beforeActF[i];
+  }
+  return;
+}
+
+void NeuralNetwork::SetActivationFunction_Hidden(std::string actFuncHidden){
+  if(actFuncHidden == "Sigmoid"){
+    hidf_ptr = &NeuralNetwork::Sigmoid;
+  }else if(actFuncHidden == "ReLU"){
+    hidf_ptr = &NeuralNetwork::ReLU;
+  }else if(actFuncHidden == "Identity"){
+    hidf_ptr = &NeuralNetwork::Identity;
+  }else{
+    std::cout << "No valid function name was input !" << std::endl;
+  }
+
+}
+
+void NeuralNetwork::SetActivationFunction_Output(std::string actFuncOutput){
+  if(actFuncOutput == "Sigmoid"){
+    outf_ptr = &NeuralNetwork::Sigmoid;
+  }else if(actFuncOutput == "Softmax"){
+    outf_ptr = &NeuralNetwork::Softmax;
+  }else if(actFuncOutput == "Identity"){
+    outf_ptr = &NeuralNetwork::Identity;
+  }else{
+    std::cout << "No valid function name was input !" << std::endl;
+  }
+
+}
+
+void NeuralNetwork::SetLossFunction(std::string nameLossFunction_){
+  if(nameLossFunction_ == "MSE"){
+    loss_ptr = &NeuralNetwork::MeanSquaredError;
+  }else if(nameLossFunction_ == "BCE"){
+    loss_ptr = &NeuralNetwork::BinaryCrossEntropy;
+  }else if(nameLossFunction_ == "CCE"){
+    loss_ptr = &NeuralNetwork::CategoricalCrossEntropy;
+  }else{
+    std::cout << "No valid function name was input !" << std::endl;
+  }
+
+}
+
+void NeuralNetwork::CalcuHiddenLayer(){
+  int nConnection = w.size();
+  for(int ith_connection = 0 ; ith_connection < nConnection - 1 ; ith_connection++){
+    for(int i = 0 ; i < (int)w[ith_connection].size() ; i++){
+      double sum = 0;
+      for(int j = 0 ; j < (int)w[ith_connection][i].size() ; j++){
+	sum += nLayerNeurons[ith_connection][j] * w[ith_connection][i][j];
+      }
+      sum += b[ith_connection][i];
+      nLayerNeurons[ith_connection + 1][i] = hidf_ptr(sum);
+    }
   }
   return;
 }
 
 void NeuralNetwork::CalculationAllStageOfLayer(){
-  int nConnection = w.size();
-  //std::cout << nConnection << std::endl;
-  
-  for(int ith_connection = 0 ; ith_connection < nConnection ; ith_connection++){
-    CalcuToNextLayerNeurons(ith_connection);
+  // --- Hidden Layer -- //
+  CalcuHiddenLayer();
+  // --- Last Layer --//
+  int last_con = (int)w.size() - 1;
+  vec1D beforeActFunc;
+  for(int i = 0 ; i < (int)w[last_con].size() ; i++){ 
+    double sum = 0;
+    for(int j = 0 ; j < (int)w[last_con][i].size() ; j++){
+      sum += nLayerNeurons[last_con][j] * w[last_con][i][j];
+    }
+    sum += b[last_con][i];
+    beforeActFunc.push_back(sum);
+    //nLayerNeurons[ith_connection + 1][i] = hidf_ptr(sum);
   }
+  outf_ptr(nLayerNeurons[last_con + 1], beforeActFunc);
+  
 }
 
 template <class T>
@@ -117,7 +224,7 @@ void NeuralNetwork::Learning(vec2D const &inputDataSet, vec2D const &answerDataS
   
   GA = GeneticAlgorithm<double>(gene_length, population_);
   GA.GeneInitialization(lower, upper);
-  
+
   for(int iLearn = 0 ; iLearn < nRepetitions ; iLearn++){
     if(iLearn % 100 == 0){
       std::cout << "------ " << iLearn << " Times Learning ----" << std::endl;
@@ -126,19 +233,20 @@ void NeuralNetwork::Learning(vec2D const &inputDataSet, vec2D const &answerDataS
       SetWeightFromGene(GA, iCreature);
       double error = 0;
       for(int iEntry = 0 ; iEntry < nEntries ; iEntry++){
-  	InputData(inputDataSet[iEntry]);	
-  	CalculationAllStageOfLayer();
-  	error += ErrorEvaluation( nLayerNeurons[last], answerDataSet[iEntry]);
+	InputData(inputDataSet[iEntry]);	
+	CalculationAllStageOfLayer();
+	error += loss_ptr( nLayerNeurons[last], answerDataSet[iEntry]) / numLastNeurons;
       }// end of Data Entry
 #ifdef DBPR      
-      if(iLearn % 100 == 0 && iCreature == 0) std::cout << "Error : " << error << std::endl;
+      if(iLearn % 100 == 0 && iCreature == 0)
+	std::cout << "Error (Average) = " << error / nEntries << std::endl;
 #endif
       GA.GiveScore(iCreature, error);
     }// End of looking into every creature
     //ShowInputAndOutput(GA, 0, inputDataSet);
     GA.CrossOver(nDominantGene, mutation_prob, "Minimize");
   }// End of Learning Repetition
-
+  
   SetWeightFromGene(GA, 0);
 }
 
@@ -172,7 +280,7 @@ void NeuralNetwork::Learning(vec2D const &inputDataSet, vec2D const &answerDataS
       for(int iEntry = 0 ; iEntry < nEntries ; iEntry++){
   	InputData(inputDataSet[iEntry]);	
   	CalculationAllStageOfLayer();
-  	error += ErrorEvaluation( nLayerNeurons[last], answerDataSet[iEntry]);
+  	error += loss_ptr( nLayerNeurons[last], answerDataSet[iEntry]) / numLastNeurons;
       }// end of Data Entry
 #ifdef DBPR      
       if(iLearn % 100 == 0 && iCreature == 0) std::cout << "Error : " << error << std::endl;
@@ -206,7 +314,7 @@ void NeuralNetwork::SetWeightFromGene(GeneticAlgorithm<double> &GA, int ith_crea
   return;
 }
 
-double NeuralNetwork::ErrorEvaluation(vec1D const &lastNeurons, vec1D const &answerData){
+double NeuralNetwork::MeanSquaredError(vec1D const &lastNeurons, vec1D const &answerData){
   if(lastNeurons.size() != answerData.size()){
     std::cout << "-- Error !! Discrepancy between number of neurons in last layer and answer data -- " << std::endl;
     return -1;
@@ -216,7 +324,44 @@ double NeuralNetwork::ErrorEvaluation(vec1D const &lastNeurons, vec1D const &ans
   for(int i = 0 ; i < (int)lastNeurons.size() ; i++){
     acc += Square(lastNeurons[i] - answerData[i]);
   }
-  return acc / lastNeurons.size();
+  return acc;
+}
+
+
+double NeuralNetwork::BinaryCrossEntropy(vec1D const &lastNeurons, vec1D const &answerData){
+  if((int)lastNeurons.size() != 1){
+    std::cout << "Error ! The number of neurons in Last Layer should be 1 if you use Binary Cross Entropy for loss function." << std::endl;
+  }
+  if(lastNeurons[0] == 1){
+    double bce = - answerData[0] * std::log(0.9999999999999999)
+      - (1 - answerData[0]) * std::log(1 -  0.9999999999999999);
+    return bce;
+  }
+  double BCE = - answerData[0] * std::log(lastNeurons[0])
+    - (1 - answerData[0]) * std::log(1 - lastNeurons[0]);
+  return BCE; 
+}
+
+double NeuralNetwork::CategoricalCrossEntropy(vec1D const &lastNeurons, vec1D const &answerData){
+  if(lastNeurons.size() != answerData.size()){
+    std::cout << "-- Error !! Discrepancy between number of neurons in last layer and answer data -- " << std::endl;
+    return -1;
+  }
+  double acc = 0;
+  for(int i = 0 ; i < (int)answerData.size() ; i++){
+    if(lastNeurons[i] == 1){
+      double bce = - answerData[i] * std::log(0.9999999999999999)
+	- (1 - answerData[i]) * std::log(1 -  0.9999999999999999);
+      acc += bce;
+
+      continue;
+    }
+    acc +=
+      - answerData[i] * std::log(lastNeurons[i])
+      - (1 - answerData[i]) * std::log(1. - lastNeurons[i]) ;
+
+  }
+  return acc;
 }
 
 
