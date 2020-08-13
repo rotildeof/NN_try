@@ -26,6 +26,7 @@ public:
   void SetLossFunction(std::string nameLossFunction_);
   void SetActivationFunction_Hidden(std::string actFuncHidden);
   void SetActivationFunction_Output(std::string actFuncOutput);
+  void SetLearningMethod(std::string method);
   //[i][j] : [i] --> Data entry, [j] --> ith Neuron in first (last) layer.
   void Learning(vec2D const &inputDataSet,
 		vec2D const &answerDataSet,
@@ -33,6 +34,9 @@ public:
   void Learning(vec2D const &inputDataSet,
 		vec2D const &answerDataSet,
 		double threshold);
+  void TrainNN(vec2D const &inputDataSet,
+	       vec2D const &answerDataSet,
+	       int nRepetitions);
   
   void SetRangeOfWeight(double min, double max){lower = min; upper = max;};
   void PrintWeightMatrix();
@@ -45,8 +49,13 @@ public:
   // 3:3:2
   vec3D w;
   vec2D b;
-  vec2D nLayerNeurons;
+  vec2D nLayerNeurons; 
+  vec2D beforeActFunc; 
+  vec2D delta;
+  vec3D dw;
+  vec2D db;
 
+  
   int numLastNeurons;
   void CalcuHiddenLayer();
   void CalculationAllStageOfLayer();
@@ -57,14 +66,49 @@ public:
   static double Sigmoid(double x);
   static double ReLU(double x);
   static double Identity(double x);
+  static double DSigmoid(double x);
+  static double DReLU(double x);
+  static double DIdentity(double x);
   static void Sigmoid(vec1D &lastLayer, vec1D const &beforeActF);
   static void Softmax(vec1D &lastLayer, vec1D const &beforeActF);
   static void Identity(vec1D &lastLayer, vec1D const &beforeActF);
+  // static void DSigmoid(vec1D &outputVec, vec1D const &inputVec);
+  // static void DSoftmax(vec1D &outputVec, vec1D const &inputVec);
+  // static void DIdentity(vec1D &outputVec, vec1D const &inputVec);
+  
+  
+  void CalculationLastLayerDelta(vec1D const &NNoutput, vec1D const &answer);
+  void CalculationLastLayerDeltaSoftmax(vec1D const &NNoutput, vec1D const &answer);
+  void CalculationAllLayerDelta();
+  void CalcuGradientW();
+  void SGD();
+  void MomentumSGD();
+  void Adam();
+  double beta_1 = 0.9;      // Adam
+  double beta_2 = 0.999;    // Adam
+  double epsilon = 1e-8;    // Adam
+  double alpha_Adam = 0.001;// Adam
+  vec3D m_w;                // Adam
+  vec3D v_w;                // Adam
+  vec2D m_b;                // Adam
+  vec2D v_b;                // Adam
+  
   double (*hidf_ptr)(double x) = &NeuralNetwork::ReLU;  // "Sigmoid", "ReLU"
   void (*outf_ptr)(vec1D &lL, vec1D const &bAF) = &NeuralNetwork::Sigmoid;
-  double population_ = 100; //default
-  double mutation_prob = 0.05; // default
-  double nDominantGene = 5; //default
+
+  double (*hiddf_ptr)(double x) = &NeuralNetwork::DReLU;
+  double (*outdf_ptr)(double x) = &NeuralNetwork::DSigmoid;
+  void (NeuralNetwork::*deltaCalcu_ptr)(vec1D const &NNoutput, vec1D const &answer);
+  void (NeuralNetwork::*method_ptr)();
+  double learningRate = 0.01;
+  double alpha = 0.9; // for momentum SGD
+  
+  vec3D dweight; // for momentum SGD
+  vec2D doffset; // for momentum SGD
+  
+  double population_ = 100; //default : for GA
+  double mutation_prob = 0.05; // default : for GA
+  double nDominantGene = 5; //default : for GA
 
   std::mt19937 mt;
 
@@ -72,9 +116,13 @@ public:
   // ---- Loss Function ---- //
   double (*loss_ptr)(vec1D const &lastNeurons, vec1D const &answerData)
   = &NeuralNetwork::MeanSquaredError;
+  double (*dloss_ptr)(double y, double d) = &NeuralNetwork::DMSE;
   static double MeanSquaredError(vec1D const &lastNeurons, vec1D const &answerData); // MSE
   static double BinaryCrossEntropy(vec1D const &lastNeurons, vec1D const &answerData); // BCE
   static double CategoricalCrossEntropy(vec1D const &lastNeurons, vec1D const &answerData); //CCE
+  static double DMSE(double y, double d);
+  static double DBCE(double y, double d);
+  static double DCCE(double y, double d);
   // ---------------------- //
   void SetWeightFromGene(GeneticAlgorithm<double> &GA, int ith_creature);
   void ShowInputAndOutput(GeneticAlgorithm<double> &GA, int ith_creature,
